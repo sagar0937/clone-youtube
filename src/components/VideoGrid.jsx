@@ -1,86 +1,70 @@
-import React, { useEffect, useRef, useCallback } from "react";
+import React, { useEffect, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
-import { fetchVideos } from "../store/slices/videosSlice";
-import { formatDistanceToNow } from "date-fns";
+import { fetchTrendingVideos } from "../store/slices/videosSlice";
 
 function VideoGrid() {
   const dispatch = useDispatch();
-  const { items: videos, loading, page } = useSelector((state) => state.videos);
-  const observer = useRef();
+  const { loading, error, videos } = useSelector((state) => state?.videos);
 
-  const lastVideoRef = useCallback(
-    (node) => {
-      if (loading) return;
-      if (observer.current) observer.current.disconnect();
-
-      observer.current = new IntersectionObserver((entries) => {
-        if (entries[0].isIntersecting) {
-          dispatch(fetchVideos(page));
-        }
-      });
-
-      if (node) observer.current.observe(node);
-    },
-    [loading, page, dispatch]
-  );
+  // State to track the currently playing video
+  const [playingVideoId, setPlayingVideoId] = useState(null);
 
   useEffect(() => {
-    if (videos.length === 0) {
-      dispatch(fetchVideos(1));
-    }
-  }, [dispatch, videos.length]);
+    dispatch(fetchTrendingVideos());
+  }, [dispatch]);
 
-  const formatViews = (views) => {
-    if (views >= 1000000) {
-      return `${(views / 1000000).toFixed(1)}M`;
-    }
-    if (views >= 1000) {
-      return `${(views / 1000).toFixed(1)}K`;
-    }
-    return views;
-  };
+  if (loading) return <p>Loading...</p>;
+  if (error) return <p>Error: {error}</p>;
 
   return (
     <main className="flex-1 pt-16 md:pl-64">
       <div className="p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-        {videos.map((video, index) => (
-          <div
-            key={video.id}
-            ref={index === videos.length - 1 ? lastVideoRef : null}
-            className="flex flex-col space-y-2"
-          >
-            <div className="relative aspect-video rounded-lg overflow-hidden">
-              <img
-                src={video.thumbnail}
-                alt={video.title}
-                className="w-full h-full object-cover hover:scale-105 transition-transform duration-200"
-              />
-            </div>
-            <div className="flex space-x-3">
-              <img
-                src={video.channelAvatar}
-                alt={video.channelTitle}
-                className="w-9 h-9 rounded-full"
-              />
-              <div>
-                <h3 className="font-semibold line-clamp-2">{video.title}</h3>
-                <p className="text-sm text-gray-600">{video.channelTitle}</p>
-                <p className="text-sm text-gray-600">
-                  {formatViews(video.views)} views •{" "}
-                  {formatDistanceToNow(new Date(video.publishedAt), {
-                    addSuffix: true,
-                  })}
-                </p>
+        {videos?.map((video, index) => {
+          const videoId = video.id?.videoId || video.id;
+
+          return (
+            <div
+              key={videoId}
+              className="flex flex-col space-y-2"
+              onClick={() => setPlayingVideoId(videoId)} // Set the video to play on click
+            >
+              {playingVideoId === videoId ? (
+                // If the video is clicked, show the YouTube player
+                <div className="relative aspect-video rounded-lg overflow-hidden">
+                  <iframe
+                    width="100%"
+                    height="100%"
+                    src={`https://www.youtube.com/embed/${videoId}?autoplay=1`}
+                    title={video.snippet?.title || "YouTube video player"}
+                    frameBorder="0"
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                    referrerPolicy="strict-origin-when-cross-origin"
+                    allowFullScreen
+                  ></iframe>
+                </div>
+              ) : (
+                // Show the thumbnail when the video is not playing
+                <div className="relative aspect-video rounded-lg overflow-hidden cursor-pointer">
+                  <img
+                    src={video?.snippet?.thumbnails?.medium?.url}
+                    alt={video?.snippet?.title || "YouTube video thumbnail"}
+                    className="w-full h-full object-cover hover:scale-105 transition-transform duration-200"
+                  />
+                </div>
+              )}
+
+              {/* Video title */}
+              <div className="text-sm font-semibold">
+                {video?.snippet?.title}
+              </div>
+              {/* Channel name */}
+              <div className="text-xs text-gray-500">
+                {video?.snippet?.channelTitle}
               </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
-      {loading && (
-        <div className="flex justify-center p-4">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
-        </div>
-      )}
     </main>
   );
 }
